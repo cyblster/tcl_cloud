@@ -1,3 +1,5 @@
+# Пример управления кондиционером TCL
+
 from enum import Enum
 
 from tcl_cloud import TclCloud
