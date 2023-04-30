@@ -24,7 +24,6 @@ class TclCloud:
         self._session_token = None
         self._signature = None
 
-        # 4 Step Authorization
         self._login_step_1()
         self._login_step_2()
         self._login_step_3()
@@ -45,19 +44,13 @@ class TclCloud:
             'password': hashlib.md5(self._password.encode('utf-8')).hexdigest(),
             'username': self._username
         }
-        response = self.__session.post(url, params=params, json=data, headers=headers)
+        response_json = self.__session.post(url, params=params, json=data, headers=headers).json()
 
-        if response.status_code != 200:
-            return False
-
-        response_json = response.json()
         if 'user' not in response_json:
-            return False
+            raise ValueError('Invalid username or password')
 
         self._tcl_id = response_json['user']['username']
         self._access_token = response_json['token']
-
-        return True
 
     def _login_step_2(self):
         url = 'https://prod-center.aws.tcljd.com/v2/global/cloud_url_get'
@@ -68,19 +61,10 @@ class TclCloud:
             'ssoId': self._tcl_id,
             'ssoToken': self._access_token
         }
-        response = self.__session.post(url, json=data, headers=headers)
-
-        if response.status_code != 200:
-            return False
-
-        response_json = response.json()
-        if response_json['message'] != 'SUCCESS':
-            return False
+        response_json = self.__session.post(url, json=data, headers=headers).json()
 
         self._cloud_url = response_json['data']['cloud_url']
         self._cloud_region = response_json['data']['cloud_region']
-
-        return True
 
     def _login_step_3(self):
         url = f'{self._cloud_url}/v3/auth/refresh_tokens'
@@ -93,14 +77,7 @@ class TclCloud:
             'lang': self._region.lower(),
             'userId': self._tcl_id
         }
-        response = self.__session.post(url, json=data, headers=headers)
-
-        if response.status_code != 200:
-            return False
-
-        response_json = response.json()
-        if response_json['message'] != 'SUCCESS':
-            return False
+        response_json = self.__session.post(url, json=data, headers=headers).json()
 
         self._cognito_id = response_json['data']['cognitoId']
         self._cognito_token = response_json['data']['cognitoToken']
@@ -122,20 +99,11 @@ class TclCloud:
             },
             'IdentityId': self._cognito_id
         }
-        response = self.__session.post(url, json=data, headers=headers)
-
-        if response.status_code != 200:
-            return False
-
-        response_json = response.json()
-        if 'Credentials' not in response_json:
-            return False
+        response_json = self.__session.post(url, json=data, headers=headers).json()
 
         self._access_key_id = response_json['Credentials']['AccessKeyId']
         self._secret_key = response_json['Credentials']['SecretKey']
         self._session_token = response_json['Credentials']['SessionToken']
-
-        return True
 
     def get_info(self, device_id: str):
         url = f'https://{self._mqtt_endpoint}/things/{device_id}/shadow'
@@ -151,10 +119,16 @@ class TclCloud:
             session_token=self._session_token
         ))
 
-        if response.status_code != 200:
-            return None
+        response_json = response.json()
+        if response.status_code == 403:
+            if response_json['message'] is None:
+                raise ValueError('Invalid device id')
 
-        return response.json()
+            self._login_step_3()
+            self._login_step_4()
+            return self.get_info(device_id)
+
+        return response_json
 
     def send_action(self, device_id: str, **data):
         url = f'https://{self._mqtt_endpoint}/topics/$aws/things/{device_id}/shadow/update'
@@ -179,7 +153,13 @@ class TclCloud:
             session_token=self._session_token
         ))
 
-        if response.status_code != 200:
-            return False
+        response_json = response.json()
+        if response.status_code == 403:
+            if response_json['message'] is None:
+                raise ValueError('Invalid device id')
+
+            self._login_step_3()
+            self._login_step_4()
+            return self.send_action(device_id, **data)
 
         return True
