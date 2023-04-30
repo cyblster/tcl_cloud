@@ -1,4 +1,4 @@
-from aenum import Enum, NoAlias
+from enum import Enum
 
 from tcl_cloud import TclCloud
 
@@ -11,13 +11,13 @@ class Mode(Enum):
     heat = 4
 
 
-class FanSpeed(Enum, settings=NoAlias):
-    auto = 0
-    quiet = 2
-    low = 2
-    medium = 4
-    high = 6
-    turbo = 6
+class FanSpeed(Enum):  # (windSpeed, silentSwitch, turbo)
+    auto = (0, 0, 0)
+    quiet = (2, 1, 0)
+    low = (2, 0, 0)
+    medium = (4, 0, 0)
+    high = (6, 0, 0)
+    turbo = (6, 0, 1)
 
 
 class TclAC:
@@ -27,68 +27,71 @@ class TclAC:
         self.device_id = 'CB0AzBFAAAE'
 
     def set_power(self, power: bool) -> bool:
-        return self.__cloud.send_action(self.device_id, powerSwitch=int(power))
+        data = {
+            'powerSwitch': int(power)
+        }
+        return self.__cloud.send_action(self.device_id, **data)
 
     def set_mode(self, mode: Mode) -> bool:
-        return self.__cloud.send_action(self.device_id, workMode=mode.value)
+        data = {
+            'workMode': mode.value
+        }
+
+        return self.__cloud.send_action(self.device_id, **data)
 
     def set_temperature(self, temperature: int) -> bool:
         if not 16 <= temperature <= 31:
             raise ValueError(f'Temperature must be between 16 and 31')
 
-        return self.__cloud.send_action(self.device_id, targetTemperature=temperature)
+        data = {
+            'targetTemperature': temperature
+        }
+
+        return self.__cloud.send_action(self.device_id, **data)
 
     def set_fan_speed(self, fan_speed: FanSpeed) -> bool:
-        silence_switch = 1 if fan_speed == FanSpeed.quiet else 0
-        turbo = 1 if fan_speed == FanSpeed.turbo else 0
+        wind_speed, silence_switch, turbo = fan_speed.value
 
-        return self.__cloud.send_action(self.device_id, windSpeed=fan_speed.value,
-                                        silenceSwitch=silence_switch, turbo=turbo)
+        data = {
+            'windSpeed': wind_speed,
+            'silenceSwitch': silence_switch,
+            'turbo': turbo
+        }
+
+        return self.__cloud.send_action(self.device_id, **data)
 
     @property
     def state(self) -> dict:
-        return self.__cloud.get_info(self.device_id)['state']
+        return self.__cloud.get_info(self.device_id)['state']['desired']
 
     @property
     def power(self) -> bool:
-        return bool(self.state['desired']['powerSwitch'])
+        return bool(self.state['powerSwitch'])
 
     @property
     def mode(self) -> Mode:
-        return Mode(self.state['desired']['workMode']).name
+        return Mode(self.state['workMode'])
 
     @property
     def target_temperature(self) -> int:
-        return self.state['desired']['targetTemperature']
+        return self.state['targetTemperature']
 
     @property
     def current_temperature(self) -> int:
-        return self.state['desired']['currentTemperature']
+        return self.state['currentTemperature']
 
     @property
     def fan_speed(self) -> FanSpeed:
         state = self.state
 
-        fan_speed = 'auto'
-        if state['desired']['silenceSwitch']:
-            fan_speed = 'quiet'
-        elif state['desired']['turbo']:
-            fan_speed = 'turbo'
-        elif state['desired']['windSpeed'] == 2:
-            fan_speed = 'low'
-        elif state['desired']['windSpeed'] == 4:
-            fan_speed = 'medium'
-        elif state['desired']['windSpeed'] == 6:
-            fan_speed = 'high'
-
-        return FanSpeed[fan_speed].name
+        return FanSpeed((state['windSpeed'], state['silenceSwitch'], state['turbo']))
 
 
 if __name__ == '__main__':
-    username = 'foo'
-    password = 'bar'
+    username = '########'
+    password = '########'
 
     tcl_cloud = TclCloud(username, password, region='ru')
     ac = TclAC(tcl_cloud)
 
-    # print(ac.state)
+    print(ac.state)
