@@ -13,7 +13,7 @@ class Mode(Enum):
     heat = 4
 
 
-class FanSpeed(Enum):  # (windSpeed, silentSwitch, turbo)
+class FanSpeed(Enum):  # (windSpeed, silenceSwitch, turbo)
     auto = (0, 0, 0)
     quiet = (2, 1, 0)
     low = (2, 0, 0)
