@@ -130,7 +130,7 @@ class TclCloud:
 
         return response_json
 
-    def send_action(self, device_id: str, **data):
+    def send_action(self, device_id: str, **kwargs):
         url = f'https://{self._mqtt_endpoint}/topics/$aws/things/{device_id}/shadow/update'
         headers = {
             'User-Agent': self.__user_agent,
@@ -141,7 +141,7 @@ class TclCloud:
         }
         data = {
             'state': {
-                'desired': data
+                'desired': kwargs
             },
             'clientToken': 'mqtt_ios'
         }
@@ -160,6 +160,6 @@ class TclCloud:
 
             self._login_step_3()
             self._login_step_4()
-            return self.send_action(device_id, **data)
+            return self.send_action(device_id, **kwargs)
 
         return True
